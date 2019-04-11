@@ -2,6 +2,7 @@ package io.github.teamgalacticraft.galacticraft.blocks.machines.coalgenerator;
 
 import alexiil.mc.lib.attributes.DefaultedAttribute;
 import alexiil.mc.lib.attributes.SearchOptions;
+import alexiil.mc.lib.attributes.Simulation;
 import alexiil.mc.lib.attributes.item.FixedItemInv;
 import alexiil.mc.lib.attributes.item.impl.SimpleFixedItemInv;
 import com.google.common.collect.Lists;
@@ -33,7 +34,7 @@ import java.util.Map;
 public class CoalGeneratorBlockEntity extends BlockEntity implements Tickable, BlockEntityClientSerializable {
 
     private final List<Runnable> listeners = Lists.newArrayList();
-    SimpleFixedItemInv inventory = new SimpleFixedItemInv(2);
+    final SimpleFixedItemInv inventory = new SimpleFixedItemInv(2);
     SimpleEnergyAttribute energy = new SimpleEnergyAttribute(10000, GalacticraftEnergy.GALACTICRAFT_JOULES);
 
     public CoalGeneratorStatus status = CoalGeneratorStatus.INACTIVE;
@@ -68,7 +69,8 @@ public class CoalGeneratorBlockEntity extends BlockEntity implements Tickable, B
     public void tick() {
         int prev = energy.getCurrentEnergy();
 
-        if (canUseAsFuel(inventory.getInvStack(0)) && (status == CoalGeneratorStatus.INACTIVE || status == CoalGeneratorStatus.IDLE) && energy.getCurrentEnergy() < energy.getMaxEnergy()) {
+        ItemStack burnableStack = inventory.getInvStack(0);
+        if (canUseAsFuel(burnableStack) && (status == CoalGeneratorStatus.INACTIVE || status == CoalGeneratorStatus.IDLE) && energy.getCurrentEnergy() < energy.getMaxEnergy()) {
             if (status == CoalGeneratorStatus.INACTIVE) {
                 this.status = CoalGeneratorStatus.WARMING;
             } else {
@@ -76,9 +78,10 @@ public class CoalGeneratorBlockEntity extends BlockEntity implements Tickable, B
             }
             this.fuelTimeMax = 200;
             this.fuelTimeCurrent = 0;
-            this.fuelEnergyPerTick = createFuelTimeMap().get(this.inventory.getInvStack(0).getItem());
-
-            this.inventory.getInvStack(0).setAmount(this.inventory.getInvStack(0).getAmount() - 1);
+            this.fuelEnergyPerTick = createFuelTimeMap().get(burnableStack.getItem());
+            burnableStack = burnableStack.copy();
+            burnableStack.split(1);
+            this.inventory.setInvStack(0, burnableStack, Simulation.ACTION);
         }
 
         if (this.status == CoalGeneratorStatus.WARMING) {
@@ -107,12 +110,17 @@ public class CoalGeneratorBlockEntity extends BlockEntity implements Tickable, B
             }
         }
 
-        if (inventory.getInvStack(1).getTag() != null && getEnergy().getCurrentEnergy() > 0) {
-            if (GalacticraftEnergy.isEnergyItem(inventory.getInvStack(1))) {
-                if (inventory.getInvStack(1).getTag().getInt("Energy") < inventory.getInvStack(1).getTag().getInt("MaxEnergy")) {
+        ItemStack batteryStack = inventory.getInvStack(1);
+        CompoundTag batteryTag = batteryStack.getTag();
+        if (batteryTag != null && getEnergy().getCurrentEnergy() > 0) {
+            if (GalacticraftEnergy.isEnergyItem(batteryStack)) {
+                if (batteryTag.getInt("Energy") < batteryTag.getInt("MaxEnergy")) {
                     energy.extractEnergy(GalacticraftEnergy.GALACTICRAFT_JOULES, 1, ActionType.PERFORM);
-                    inventory.getInvStack(1).getTag().putInt("Energy", this.inventory.getInvStack(1).getTag().getInt("Energy") + 1);
-                    inventory.getInvStack(1).setDamage(this.inventory.getInvStack(1).getDamage() - 1);
+                    batteryStack = batteryStack.copy();
+                    batteryTag = batteryStack.getOrCreateTag();
+                    batteryTag.putInt("Energy", batteryTag.getInt("Energy") + 1);
+                    batteryStack.setDamage(batteryStack.getDamage() - 1);
+                    inventory.setInvStack(1, batteryStack, Simulation.ACTION);
                 }
             }
         }
